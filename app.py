@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import re
 from groq import Groq
 
 # 📄 ১. পেজ এবং থিম কনফিগারেশন
 st.set_page_config(
-    page_title="Footwear Production OS",
+    page_title="Footwear AI OS",
     page_icon="👟",
     layout="wide"
 )
@@ -14,11 +15,18 @@ st.set_page_config(
 # 🔐 Groq API কী চেকিং
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.sidebar.text_input("Enter Groq API Key:", type="password")
 
-# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (আপনার এক্সেলের ব্যাকএন্ড ডাটাবেস)
-if 'projects' not in st.session_state:
-    st.session_state.projects = {}  # এখানে প্রতিটি New Article এর জন্য একটি করে 'Sheet' বা ডিকশনারি তৈরি হবে
+if not GROQ_API_KEY:
+    st.warning("⚠️ Please provide a Groq API Key to activate the Master Agent.")
+    st.stop()
 
-# ফিক্সড মাস্টার লিড টাইম লজিক (যা আপনার এক্সেল শিটে ফর্মুলা আকারে ছিল)
+# Groq ক্লায়েন্ট ইনিশিয়েট করা
+client = Groq(api_key=GROQ_API_KEY)
+
+# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (এক্সেল ব্যাকএন্ড ডাটাবেস)
+if 'projects' not in st.session_state:
+    st.session_state.projects = {}
+
+# ফিক্সড মাস্টার লিড টাইম লজিক (মাস্টার টেমপ্লেট)
 TASK_LEAD_TIMES = [
     ("Go ship", 0),  
     ("Go prod", -27),
@@ -48,7 +56,7 @@ TASK_LEAD_TIMES = [
     ("Project Initiation", -381)
 ]
 
-# ব্যাকওয়ার্ড ক্যালকুলেশন ইঞ্জিন (যা এক্সেলে অটো-ডেট জেনারেট করত)
+# ব্যাকওয়ার্ড ক্যালকুলেশন ইঞ্জিন
 def generate_timeline_df(base_date):
     tasks_list = []
     for task, days in reversed(TASK_LEAD_TIMES):
@@ -67,37 +75,111 @@ def generate_timeline_df(base_date):
         })
     return pd.DataFrame(tasks_list)
 
-# --- 🖥️ ৩. নেভিগেশন ট্যাব বা এক্সেল শিট ট্যাব মেকানিজম ---
-# আপনার এক্সেলের নিচের ট্যাবগুলোর মতো এখানে আমরা মূল ৩টি সেকশন তৈরি করলাম
+# --- 🧠 ৩. স্পেশালাইজড এজেন্ট: 80/20 PLANNER AGENT (AI) ---
+PLANNER_SYSTEM_PROMPT = """
+You are the "Footwear Production 80/20 Planner". Your job is to act as a highly experienced PPC Manager.
+Analyze the user's input, project details, or questions regarding their footwear production timelines. 
+Focus heavily on the top 20% high-leverage milestones (like Material Orders, Sample ETD, BOM Validation) that prevent line stoppage.
+Respond professionally using clear bullet points.
+"""
+
+def run_80_20_planner(user_input):
+    completion = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {"role": "user", "content": user_input}
+        ],
+        temperature=0.3
+    )
+    return completion.choices[0].message.content
+
+# --- 🧠 ৪. মাস্টার রাউটার প্রম্পট (Router Logic) ---
+MASTER_ROUTER_PROMPT = """
+You are the "Master AI OS Router". Classify the user's request into exactly ONE category:
+1. PLANNER (Choose this for anything related to timelines, schedules, 80/20 updates, tracking sheets, or dates)
+2. WORKPLACE_EXECUTION (Choose this for technical calculations, BOM audits, or wastage analysis)
+3. KNOWLEDGE_BASE (Choose this for Decathlon SOP, specifications, or reference lookups)
+
+CRITICAL: Output ONLY the word 'PLANNER', 'WORKPLACE_EXECUTION', or 'KNOWLEDGE_BASE'. Do not add any punctuation.
+"""
+
+def route_request(user_input):
+    completion = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": MASTER_ROUTER_PROMPT},
+            {"role": "user", "content": user_input}
+        ],
+        temperature=0.0,
+        max_tokens=10
+    )
+    return completion.choices[0].message.content.strip().upper()
+
+
+# ========================================================
+# 💻 ৫. STREAMLIT VISUAL UI WITH INTEGRATED MASTER AGENT
+# ========================================================
+
+st.title("👟 Footwear AI OS — Intelligent Workspace")
+st.markdown("---")
+
+# 🧠 সেকশন ১: সেন্ট্রাল মাস্টার এজেন্ট ইন্টারফেস
+st.write("### 🤖 Interact with Master AI Agent")
+user_query = st.text_area("Ask anything (e.g., 'What are the critical tasks for a style?', 'Calculate leather wastage...', 'Show Decathlon SOP')", height=80, placeholder="Type your query here...")
+submit_query = st.button("Send to Master Router", type="primary")
+
+if submit_query and user_query:
+    with st.spinner("Master Agent is routing your request..."):
+        decision = route_request(user_query)
+        st.write(f"**🎯 Master Router Decision:** `{decision}`")
+        st.markdown("---")
+        
+        if "PLANNER" in decision:
+            st.markdown("#### 📊 Specialist Agent: **[80/20 Footwear Planner Agent]**")
+            
+            # এআই প্ল্যানারের রেসপন্স শো করা
+            ai_analysis = run_80_20_planner(user_query)
+            st.info(ai_analysis)
+            
+            # টেক্সট ইনপুটের ভেতর যদি কোনো ডেট এবং নিউ স্টাইল ডিটেক্ট হয়, তবে অটো শিট ক্রিয়েশন প্রম্পট দেবে
+            date_match = re.search(r'(\d{4}[-/]\d{2}[-/]\d{2})|(\d{2}[-/]\d{2}[-/]\d{4})', user_query)
+            if date_match and ("new" in user_query.lower() or "sheet" in user_query.lower()):
+                st.success("💡 **System Note:** এটি একটি নতুন প্ল্যানিং রিকোয়েস্ট। নিচে **'Specialist Planner Sheet Engine'** ব্যবহার করে সরাসরি আপনার এক্সেল ডাটাবেসে শিটটি যুক্ত করে নিন।")
+                
+        elif "WORKPLACE_EXECUTION" in decision:
+            st.markdown("#### 🤖 Specialist Agent: **[Workplace Execution Agent]**")
+            st.warning("👟 [Workplace Execution Module]: এটি পরবর্তী ধাপে আপনার BOM list অডিট এবং Consumption ক্যালকুলেটরের সাথে যুক্ত হবে।")
+            
+        elif "KNOWLEDGE_BASE" in decision:
+            st.markdown("#### 📚 Specialist Agent: **[Knowledge Base Agent]**")
+            st.warning("📚 [Knowledge Base Module]: এটি পরবর্তী ধাপে Decathlon SOP নির্দেশিকার সাথে কানেক্ট হবে।")
+            
+        st.markdown("---")
+
+# 📊 সেকশন ২: আপনার এক্সেল প্ল্যানিং ড্যাশবোর্ড (Specialist Planner Sheet Engine)
+st.write("## 🛠️ Specialist Planner Sheet Engine (Excel Dashboard Clone)")
+
+# নেভিগেশন ট্যাব
 tab_dashboard, tab_new_article, tab_all_sheets = st.tabs([
     "📊 Central Dashboard", 
     "➕ Add New Article (New Sheet)", 
-    "📁 View Article Sheets"
+    "📁 View/Edit Article Sheets"
 ])
 
-# ==========================================
-# 📊 সেকশন ১: CENTRAL DASHBOARD (এক্সেল ড্যাশবোর্ড)
-# ==========================================
+# ---- TAB 1: CENTRAL DASHBOARD ----
 with tab_dashboard:
-    st.title("📊 Footwear Production Master Dashboard")
-    st.markdown("আপনার সমস্ত রানিং আর্টিকেলের ওভারভিউ এবং কারেন্ট স্ট্যাটাস একনজরে দেখুন।")
-    
     if not st.session_state.projects:
-        st.info("💡 বর্তমানে কোনো অ্যাক্টিভ প্রজেক্ট বা শিট নেই। 'Add New Article' ট্যাব থেকে প্রথম প্রজেক্ট যুক্ত করুন।")
+        st.info("💡 বর্তমানে কোনো অ্যাক্টিভ প্রজেক্ট শিট নেই। 'Add New Article' ট্যাব থেকে প্রথম শিট তৈরি করুন।")
     else:
-        # ড্যাশবোর্ড কেপিআই কার্ডস (KPI Cards)
         total_articles = len(st.session_state.projects)
+        st.metric("Total Running Articles (Sheets)", total_articles)
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Running Articles", total_articles)
-        
-        # ড্যাশবোর্ডের জন্য একটি মাস্টার সামারি টেবিল তৈরি করা
         dashboard_summary = []
         for name, df in st.session_state.projects.items():
             xf_date = df[df["Task Name"] == "Go ship"]["Target Date"].values[0]
             prod_date = df[df["Task Name"] == "Go prod"]["Target Date"].values[0]
             
-            # প্রজেক্টের টোটাল কত পার্সেন্ট কাজ 'Done' হয়েছে তা বের করা
             done_tasks = len(df[df["Status"] == "Done"])
             total_tasks = len(df)
             progress = int((done_tasks / total_tasks) * 100)
@@ -113,64 +195,48 @@ with tab_dashboard:
         st.write("### 📋 Active Style Master List")
         st.dataframe(pd.DataFrame(dashboard_summary), use_container_width=True, hide_index=True)
 
-# ==========================================
-# ➕ সেকশন ২: ADD NEW ARTICLE (এক্সেলের New Sheet ক্রিয়েশন)
-# ==========================================
+# ---- TAB 2: ADD NEW ARTICLE (NEW SHEET) ----
 with tab_new_article:
-    st.title("➕ Launch New Footwear Style")
-    st.markdown("এখানে নতুন আর্টিকেল ইনপুট দিলে ব্যাকএন্ডে একটি ডেডিকেটেড **'Individual Sheet'** তৈরি হয়ে যাবে।")
+    st.write("### ➕ Launch New Footwear Style Sheet")
     
     col_input1, col_input2 = st.columns(2)
-    
     with col_input1:
-        new_style_name = st.text_input("Enter Style / Article Name (Unique ID):", placeholder="e.g., 380148 - PLAY 100")
+        new_style_name = st.text_input("Style / Article Name:", placeholder="e.g., 380148 - PLAY 100", key="new_style_name_input")
     with col_input2:
-        new_xf_date = st.date_input("Select Proposed XF Date (Shipment Date):", datetime.now() + timedelta(days=365))
+        new_xf_date = st.date_input("Proposed XF Date (Shipment Date):", datetime.now() + timedelta(days=365), key="new_xf_date_input")
         
-    if st.button("🚀 Create Article Sheet & Generate Timeline"):
+    if st.button("🚀 Create Article Sheet & Generate Timeline", type="secondary"):
         if not new_style_name.strip():
             st.error("⚠️ অনুগ্রহ করে একটি সঠিক আর্টিকেলের নাম দিন।")
         elif new_style_name in st.session_state.projects:
-            st.warning(f"⚠️ '{new_style_name}' নামে অলরেডি একটি শিট রয়েছে! দয়া করে ইউনিক নাম ব্যবহার করুন।")
+            st.warning(f"⚠️ '{new_style_name}' নামে অলরেডি একটি শিট রয়েছে!")
         else:
-            with st.spinner("ক্যালকুলেটিং ব্যাকওয়ার্ড টাইমলাইন..."):
-                # নতুন আর্টিকেলের জন্য অটোমেটিক ডাটাফ্রেম শিট তৈরি
-                base_datetime = datetime.combine(new_xf_date, datetime.min.time())
-                generated_df = generate_timeline_df(base_datetime)
-                
-                # এক্সেলের মতো নতুন শিট মেমরিতে পুশ করা
-                st.session_state.projects[new_style_name] = generated_df
-                
-                st.success(f"🎉 সাফল্যজনক! '{new_style_name}' শিটটি সফলভাবে যুক্ত হয়েছে।")
-                st.balloons()
+            base_datetime = datetime.combine(new_xf_date, datetime.min.time())
+            generated_df = generate_timeline_df(base_datetime)
+            
+            # মেমরিতে নতুন এক্সেল শিট পুশ
+            st.session_state.projects[new_style_name] = generated_df
+            st.success(f"🎉 সাফল্যজনক! '{new_style_name}' শিটটি সফলভাবে যুক্ত হয়েছে।")
 
-# ==========================================
-# 📁 সেকশন ৩: VIEW ARTICLE SHEETS (আলাদা আলাদা শিট দেখা ও এডিট করা)
-# ==========================================
+# ---- TAB 3: VIEW ARTICLE SHEETS ----
 with tab_all_sheets:
-    st.title("📁 Individual Article Worksheets")
-    st.markdown("আপনার তৈরি করা যেকোনো সুনির্দিষ্ট আর্টিকেলের শিট সিলেক্ট করে তার ভেতরের ২৪টি টাস্কের ডেট ও স্ট্যাটাস আপডেট করুন।")
-    
     if not st.session_state.projects:
         st.info("কোনো ডাটা শিট পাওয়া যায়নি।")
     else:
-        # ড্রপডাউন মেনু (যেমনটি এক্সেলে শিট ট্যাব চেঞ্জ করার মতো)
         selected_style = st.selectbox("🎯 Select Active Sheet to View/Edit:", list(st.session_state.projects.keys()))
         
         if selected_style:
             st.write(f"### 📑 Worksheet for Style: `{selected_style}`")
-            
             current_df = st.session_state.projects[selected_style]
             
-            # 📝 ইন্টারঅ্যাক্টিভ এডিটিং (এক্সেলের মতো করে গ্রিডেই স্ট্যাটাস চেঞ্জ করার সুবিধা)
-            st.markdown("💡 *আপনি সরাসরি নিচের টেবিলের 'Status' কলামে ডাবল ক্লিক করে স্ট্যাটাস (Pending/Done) পরিবর্তন করতে পারেন:*")
+            st.markdown("💡 *Status পরিবর্তন করতে কলামে ডাবল ক্লিক করুন:*")
             
+            # এক্সেলের মতো ইন্টারঅ্যাক্টিভ গ্রিড এডিটর
             edited_df = st.data_editor(
                 current_df,
                 column_config={
                     "Status": st.column_config.SelectboxColumn(
                         "Status",
-                        help="Task Current Status",
                         options=["Pending", "Running", "Done", "Delayed"],
                         required=True,
                     ),
@@ -183,7 +249,6 @@ with tab_all_sheets:
                 key=f"editor_{selected_style}"
             )
             
-            # সেভ বা আপডেট স্টেট চেঞ্জ
             if st.button(f"💾 Save Changes to {selected_style} Sheet"):
                 st.session_state.projects[selected_style] = edited_df
                 st.success(f"✅ {selected_style} শিটের স্ট্যাটাস আপডেট সেভ করা হয়েছে!")
