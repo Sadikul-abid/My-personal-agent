@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import os
-from groq import Groq
 
 # 📄 ১. পেজ কনফিগারেশন
 st.set_page_config(
@@ -29,8 +27,8 @@ st.markdown("""
 
         /* 🎛️ Scrollbar Styling to make it highly visible */
         [data-testid="stDataEditor"] ::-webkit-scrollbar {
-            height: 12px !important;
-            width: 12px !important;
+            height: 14px !important;
+            width: 14px !important;
             display: block !important;
         }
         [data-testid="stDataEditor"] ::-webkit-scrollbar-track {
@@ -48,20 +46,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🔐 Groq API কী চেকিং
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.sidebar.text_input("Enter Groq API Key:", type="password")
 
-if not GROQ_API_KEY:
-    st.warning("⚠️ Please provide a Groq API Key to activate the Master Router Agent.")
-    st.stop()
-
-client = Groq(api_key=GROQ_API_KEY)
-
-# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট
+# 💾 ২. স্ট্রীমলিট স্টেট MANAGEMENT (ইন-মেমোরি ডেটাবেস)
 if 'master_template' not in st.session_state:
     st.session_state.master_template = [
         {"SL No": 1.0, "Task Name": "Project Initiation", "Fixed Days": 0.0},
-        {"SL No": 2.0, "Task Name": "Consumption, CBD (sharing)\n", "Fixed Days": 0.0},
+        {"SL No": 2.0, "Task Name": "Consumption, CBD (sharing)", "Fixed Days": 0.0},
         {"SL No": 3.0, "Task Name": "Sample Order: Raw Materials", "Fixed Days": 30.0},
         {"SL No": 4.0, "Task Name": "Sample Received: Raw Materials", "Fixed Days": 7.0},
         {"SL No": 5.0, "Task Name": "Sample Order: Threads/Packing Materials", "Fixed Days": 15.0},
@@ -70,7 +60,7 @@ if 'master_template' not in st.session_state:
         {"SL No": "", "Task Name": "Bulk Material: Order", "Fixed Days": 90.0},
         {"SL No": "", "Task Name": "Bulk Material: ETA", "Fixed Days": 7.0},
         {"SL No": 21.0, "Task Name": "Sample Mold: Order", "Fixed Days": 42.0},
-        {"SL No": 23.0, "Task Name": "Samlpe Mold: ETA", "Fixed Days": 7.0},
+        {"SL No": 23.0, "Task Name": "Sample Mold: ETA", "Fixed Days": 7.0},
         {"SL No": 24.0, "Task Name": "Sample Mold: Validation", "Fixed Days": 0.0},
         {"SL No": 16.0, "Task Name": "Proto: Start", "Fixed Days": 7.0},
         {"SL No": 17.0, "Task Name": "Proto: End", "Fixed Days": 7.0},
@@ -110,6 +100,7 @@ if 'master_template' not in st.session_state:
 if 'article_sheets' not in st.session_state:
     st.session_state.article_sheets = {}
 
+# 📊 ৩. ক্যালকুলেশন ইঞ্জিন (Forward Timeline Planner)
 def calculate_forward_timeline(initiation_date):
     tasks_list = []
     current_date = initiation_date
@@ -132,49 +123,16 @@ def calculate_forward_timeline(initiation_date):
         })
     return pd.DataFrame(tasks_list)
 
-# --- 🧠 ৩. সেন্ট্রাল মাস্টার এজেন্ট ---
-MASTER_ROUTER_PROMPT = """
-You are the "Master AI Agent". Output exactly ONE word in uppercase: PLANNER_SPECIALIST, WORKPLACE_EXECUTION, or KNOWLEDGE_BASE.
-"""
-
-def route_request_to_agent(user_input):
-    completion = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "system", "content": MASTER_ROUTER_PROMPT}, {"role": "user", "content": user_input}],
-        temperature=0.0, max_tokens=15
-    )
-    return completion.choices[0].message.content.strip().upper()
-
-def run_planner_specialist_agent(user_input):
-    prompt = "You are the 'Planner Specialist Agent'. Provide analysis on scheduling."
-    completion = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_input}],
-        temperature=0.3
-    )
-    return completion.choices[0].message.content
-
 
 # ========================================================
-# 💻 ৪. UI INTERFACE & AGENT HUB
+# 💻 ৪. UI INTERFACE & PLANNER HUB
 # ========================================================
 
 st.title("👟 Decathlon Footwear Production OS")
+st.caption("🚀 Planner Mode - Critical Path & Timeline Engine")
 st.markdown("---")
 
-st.write("### 🤖 Master AI Agent Portal")
-user_query = st.text_area("Communicate with Master Agent", height=70)
-
-if st.button("Query Master Agent", type="primary"):
-    with st.spinner("Processing..."):
-        assigned_specialist = route_request_to_agent(user_query)
-        st.write(f"**⚡ Master Agent Routing Decision:** `Delegated to {assigned_specialist}`")
-        if "PLANNER_SPECIALIST" in assigned_specialist:
-            st.info(run_planner_specialist_agent(user_query))
-
-st.markdown("---")
-
-# 🎯 ৫. সাইডবার কন্ট্রোল
+# 🎯 ৫. সাইডবার কন্ট্রোল (নতুন স্টাইল যোগ করার জন্য)
 st.sidebar.header("➕ Create New Article Sheet")
 new_article_name = st.sidebar.text_input("New Model / Article Name:", placeholder="e.g., PLAY PROTECT 8882684")
 initiation_date = st.sidebar.date_input("Select Project Initiation Date:", datetime.now())
@@ -183,6 +141,7 @@ if st.sidebar.button("🚀 Add Tab / Sheet"):
     if new_article_name.strip() and new_article_name not in st.session_state.article_sheets:
         base_dt = datetime.combine(initiation_date, datetime.min.time())
         st.session_state.article_sheets[new_article_name] = calculate_forward_timeline(base_dt)
+        st.sidebar.success(f"Added: {new_article_name}")
         st.rerun()
 
 # 🗂️ ৬. ডাইনামিক ট্যাব ইঞ্জিন
@@ -203,21 +162,53 @@ with ui_tabs[0]:
             "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=120),
         },
         hide_index=True,
-        use_container_width=True, # মাস্টার ভিউ ৩টি কলামের জন্য ফুল উইডথ রাখাই বেস্ট
+        use_container_width=True, 
         key="master_template_editor"
     )
 
 # --- 📊 TAB 2: DASHBOARD ---
 with ui_tabs[1]:
     st.subheader("📊 Central Operations Dashboard Radar")
+    
     if not st.session_state.article_sheets:
         st.info("💡 সাইডবার থেকে প্রজেক্ট ইনপুট দিয়ে নতুন মডেল শিট এড করুন।")
+    else:
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        running_tasks = []
+        overdue_tasks = []
+        
+        for p_name, df in st.session_state.article_sheets.items():
+            for idx, row in df.iterrows():
+                t_date = row["Target Date"]
+                status = row["Status"]
+                
+                if status != "Done":
+                    if t_date == today_str:
+                        running_tasks.append({"Project / Article": p_name, "Task Name": row["Task Name"], "Target Date": t_date, "Status": status})
+                    elif t_date < today_str:
+                        overdue_tasks.append({"Project / Article": p_name, "Task Name": row["Task Name"], "Target Date": t_date, "Status": status})
+                        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 🏃‍♂️ RUNNING TASKS (TODAY)")
+            if running_tasks:
+                st.dataframe(pd.DataFrame(running_tasks), use_container_width=True, hide_index=True)
+            else:
+                st.success("✅ আজকে কোনো পেন্ডিং রানিং টাস্ক নেই!")
+        with col2:
+            st.markdown("#### 🛑 OVERDUE / DELAYED TASKS")
+            if overdue_tasks:
+                st.dataframe(pd.DataFrame(overdue_tasks), use_container_width=True, hide_index=True)
+            else:
+                st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
 
 # --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
 for i, article_name in enumerate(dynamic_article_tabs):
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
+        
+        st.markdown("💡 *ডানে-বামে সরাতে নিচের নতুন স্ক্রলবার ব্যবহার করুন:*")
         
         # এখানে কলামের ফিক্সড পিক্সেল উইডথ বাড়িয়ে `use_container_width=False` করা হয়েছে যেন কন্টেন্ট ওভারফ্লো হয়ে স্ক্রলবার চলে আসে
         edited_df = st.data_editor(
