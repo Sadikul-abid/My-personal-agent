@@ -4,51 +4,43 @@ from datetime import datetime, timedelta
 import os
 from groq import Groq
 
-# 📄 ১. পেজ কনফিগারেশন ও লেআউট
+# 📄 ১. পেজ কনফিগারেশন
 st.set_page_config(
     page_title="Decathlon Footwear Production OS",
     page_icon="👟",
     layout="wide"
 )
 
-# 🎨 🛠️ ADVANCED CSS FOR FORCED HORIZONTAL SCROLLBAR
-# টেবিলের ডাটা যেন কোনোভাবেই না কাটে এবং ব্রাউজার নিচে একটি স্পষ্ট স্ক্রলবার দেয়, তা নিশ্চিত করা হয়েছে
+# 🎨 🛠️ ADVANCED WRAPPER CSS FOR FORCED SCROLLBAR
+# এটি পুরো টেবিলের প্যারেন্ট কন্টেইনারকে স্ক্রিনের ভেতরে আটকে না রেখে ডানে প্রসারিত হতে সাহায্য করবে
 st.markdown("""
     <style>
-        /* Force container to allow horizontal overflow */
-        .stBlock {
+        /* Force the inner wrapper of Streamlit data components to show horizontal scrollbar always */
+        [data-testid="stDataFrameTotalContainer"] {
             overflow-x: auto !important;
-        }
-        
-        /* Target Streamlit's internal glide-data-grid wrap */
-        div[data-testid="stDataEditor"] {
-            overflow-x: auto !important;
-            min-width: 100% !important;
             display: block !important;
         }
-        
-        div[data-testid="stDataEditor"] > div {
+        .element-container iframe, div[data-testid="stDataEditor"] {
+            width: 100% !important;
             overflow-x: auto !important;
         }
-
-        /* Make the scrollbar look thick and visible */
+        /* Style the physical scrollbar track and thumb to ensure it is thick and visible */
         ::-webkit-scrollbar {
-            height: 12px !important;
-            width: 12px !important;
+            height: 14px !important;
+            width: 14px !important;
             display: block !important;
         }
         ::-webkit-scrollbar-track {
-            background: #f7f9fa !important;
-            border-radius: 6px !important;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.1) !important;
+            background: #f1f3f5 !important;
+            border-radius: 4px !important;
         }
         ::-webkit-scrollbar-thumb {
-            background: #a1a8af !important;
-            border-radius: 6px !important;
-            border: 2px solid #f7f9fa !important;
+            background: #adb5bd !important;
+            border-radius: 4px !important;
+            border: 2px solid #f1f3f5 !important;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #78828c !important;
+            background: #6c757d !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -212,7 +204,7 @@ if st.sidebar.button("🚀 Add Tab / Sheet"):
         st.sidebar.success(f"🎉 Tab '{new_article_name}' added successfully!")
         st.rerun()
 
-# 🗂️ 六. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
+# 🗂️ ৬. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
 base_tabs = ["📋 Master_Template", "📊 Dashboard"]
 dynamic_article_tabs = list(st.session_state.article_sheets.keys())
 all_tabs_list = base_tabs + dynamic_article_tabs
@@ -222,7 +214,18 @@ ui_tabs = st.tabs(all_tabs_list)
 # --- 📋 TAB 1: MASTER_TEMPLATE ---
 with ui_tabs[0]:
     st.subheader("📋 Core Master Template Configuration")
-    st.dataframe(pd.DataFrame(st.session_state.master_template), use_container_width=True, hide_index=True)
+    # মাস্টার ভিউ কন্টেইনারকেও ডাইনামিক এবং ফিক্সড উইডথ দিয়ে রেডি করা হয়েছে
+    st.data_editor(
+        pd.DataFrame(st.session_state.master_template),
+        column_config={
+            "SL No": st.column_config.TextColumn("SL No", width=100),
+            "Task Name": st.column_config.TextColumn("Task Name", width=400),
+            "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=150),
+        },
+        hide_index=True,
+        use_container_width=False,
+        key="master_template_editor"
+    )
 
 # --- 📊 TAB 2: DASHBOARD ---
 with ui_tabs[1]:
@@ -261,15 +264,15 @@ with ui_tabs[1]:
                 st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
 
 # --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
-# এখানে কলামের ফিক্সড টোটাল পিক্সেল উইডথ বাড়িয়ে দেওয়া হয়েছে যাতে টেবিলটি কন্টেইনার ওভারফ্লো করে স্ক্রলবার ট্রিগার করে।
+# এখানে কলামের ফিক্সড টোটাল পিক্সেল উইডথ স্পেসিফিক করে দেওয়া হয়েছে যেন স্ক্রলবার কাজ করতে বাধ্য হয়
 for i, article_name in enumerate(dynamic_article_tabs):
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
         
-        st.markdown("💡 *ডানে-বামে সরাতে নিচের নতুন স্ক্রলবার ব্যবহার করুন:*")
+        st.markdown("💡 *ডানে-বামে সরাতে নিচের স্ক্রলবার ব্যবহার করুন:*")
         
-        # কন্টেইনারের বাইরে ডেটা পুশ করার জন্য উইডথ বাড়ানো হয়েছে
+        # টেবিল গ্রিড কনফিগারেশন
         edited_df = st.data_editor(
             df_current,
             column_config={
@@ -286,7 +289,7 @@ for i, article_name in enumerate(dynamic_article_tabs):
                 ),
             },
             hide_index=True,
-            use_container_width=False,  # Force fixed columns format
+            use_container_width=False,  # এটিকে False রাখা হয়েছে স্ক্রলবার পপ-আপ করানোর জন্য
             key=f"editor_{article_name}"
         )
         
