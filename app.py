@@ -13,6 +13,7 @@ st.set_page_config(
 
 # 🎨 🛠️ FORCE HORIZONTAL SCROLLBAR VIA CSS
 # এটি আপনার টেবিলের নিচে ফিজিক্যাল স্ক্রলবারটি দেখতে এবং ডানে-বামে সরাতে সাহায্য করবে
+# 🎨 🛠️ FORCE HORIZONTAL SCROLLBAR VIA CSS
 st.markdown("""
     <style>
         /* Force horizontal scrollbar on Streamlit Data Editors */
@@ -41,7 +42,7 @@ st.markdown("""
             background: #a8a8a8;
         }
     </style>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)  # <-- এখানে শুধু 'unsafe_allow_html=True' লিখুন
 
 # 🔐 Groq API কী চেকিং
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.sidebar.text_input("Enter Groq API Key:", type="password")
