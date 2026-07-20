@@ -22,7 +22,6 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (এক্সেল শিট মেমোরি ডেটাবেস)
 if 'master_template' not in st.session_state:
-    # এক্সেল থেকে সংগৃহীত হুবহু ৪৪টি অফিশিয়াল টাস্ক এবং ফিক্সড লিড টাইম কনফিগারেশন
     st.session_state.master_template = [
         {"SL No": 1.0, "Task Name": "Project Initiation", "Fixed Days": 0.0},
         {"SL No": 2.0, "Task Name": "Consumption, CBD (sharing)\n", "Fixed Days": 0.0},
@@ -72,10 +71,8 @@ if 'master_template' not in st.session_state:
     ]
 
 if 'article_sheets' not in st.session_state:
-    # এখানে ডাইনামিকালি নতুন আর্টিকেল মডেলের শিট ডেটা জমা হবে
     st.session_state.article_sheets = {}
 
-# ফরোয়ার্ড ক্যালকুলেশন লিড টাইম ইঞ্জিন
 def calculate_forward_timeline(initiation_date):
     tasks_list = []
     current_date = initiation_date
@@ -151,7 +148,7 @@ if st.button("Send to Master Router", type="primary"):
 
 st.markdown("---")
 
-# 🎯 ৫. ডাইনামিক সাইডবার কন্ট্রোল: নিউ শিট অ্যাড করার প্যানেল (ম্যাক্রো রিপ্লেসমেন্ট)
+# 🎯 ৫. সাইডবার কন্ট্রোল
 st.sidebar.header("➕ Create New Article Sheet")
 new_article_name = st.sidebar.text_input("New Model / Article Name:", placeholder="e.g., 348793 - PLAY PROTECT")
 initiation_date = st.sidebar.date_input("Select Project Initiation Date:", datetime.now())
@@ -167,22 +164,20 @@ if st.sidebar.button("🚀 Add Tab / Sheet"):
         st.sidebar.success(f"🎉 Tab '{new_article_name}' added successfully!")
         st.rerun()
 
-# 🗂️ ৬. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন (হুবহু এক্সেল ট্যাব বার ক্লোন)
-# ডিফল্ট ২টি স্ট্যাটিক ট্যাব এবং এর সাথে সাথে মেমরিতে থাকা সমস্ত নিউ আর্টিকেল ডাইনামিক শিট ট্যাব হিসেবে যুক্ত হবে
+# 🗂️ ৬. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
 base_tabs = ["📋 Master_Template", "📊 Dashboard"]
 dynamic_article_tabs = list(st.session_state.article_sheets.keys())
 all_tabs_list = base_tabs + dynamic_article_tabs
 
-# সমস্ত ট্যাব একসাথে জেনারেট করা
 ui_tabs = st.tabs(all_tabs_list)
 
-# --- 📋 TAB 1: MASTER_TEMPLATE (যেখানে আপনার মাস্টার প্ল্যান স্টোর থাকে) ---
+# --- 📋 TAB 1: MASTER_TEMPLATE ---
 with ui_tabs[0]:
     st.subheader("📋 Core Master Template Configuration")
-    st.markdown("এটি আপনার সেন্ট্রাল লিด টাইম কনফিগারেশন। এখান থেকে ফিক্সড ডেস্ লজিক নিয়ে নতুন শিট জেনারেট হয়।")
+    st.markdown("এটি আপনার সেন্ট্রাল লিড টাইম কনফিগারেশন।")
     st.dataframe(pd.DataFrame(st.session_state.master_template), use_container_width=True, hide_index=True)
 
-# --- 📊 TAB 2: DASHBOARD (রানিং এবং ওভারডিউ টাস্ক উইন্ডো) ---
+# --- 📊 TAB 2: DASHBOARD ---
 with ui_tabs[1]:
     st.subheader("📊 Central Operations Dashboard Radar")
     
@@ -218,36 +213,36 @@ with ui_tabs[1]:
             else:
                 st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
 
-# --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS (নতুন মডেল ইনপুট শিটগুলো) ---
+# --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
+# এখানে আমরা কলাম কনফিগ-এ ফিক্সড `width` দিয়েছি যাতে স্ক্রিন ছোট হলেও নিচে হরিজন্টাল স্ক্রলবার কাজ করে।
 for i, article_name in enumerate(dynamic_article_tabs):
-    # স্ট্যাটিক ২টি ট্যাবের ইণ্ডেক্সের পর থেকে এসাইন করা হচ্ছে
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
         
-        st.markdown("💡 *Status পরিবর্তন করতে কলামের ড্রপডাউনে ডাবল ক্লিক করুন:*")
+        st.markdown("💡 *Status পরিবর্তন করতে কলামের ড্রপডাউনে ডাবল ক্লিক করুন। ডানে-বামে সরাতে নিচের স্ক্রলবার ব্যবহার করুন:*")
         
-        # এক্সেলের মতো গ্রিড ইন্টারফেস
+        # টেবিলটির কলাম উইডথ ফিক্সড করার মাধ্যমে স্ক্রলবার জেনারেট করা হয়েছে
         edited_df = st.data_editor(
             df_current,
             column_config={
+                "SL No": st.column_config.TextColumn("SL No", width="small", disabled=True),
+                "Task Name": st.column_config.TextColumn("Task Name", width="large", disabled=True),
+                "Fixed Days": st.column_config.NumberColumn("Fixed Days", width="small", disabled=True),
+                "Target Date": st.column_config.TextColumn("Target Date", width="medium", disabled=True),
+                "WK No": st.column_config.TextColumn("WK No", width="small", disabled=True),
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
                     options=["Not Started", "Running", "Done", "Delayed"],
+                    width="medium",
                     required=True,
                 ),
-                "SL No": st.column_config.TextColumn(disabled=True),
-                "Task Name": st.column_config.TextColumn(disabled=True),
-                "Fixed Days": st.column_config.NumberColumn(disabled=True),
-                "Target Date": st.column_config.TextColumn(disabled=True),
-                "WK No": st.column_config.TextColumn(disabled=True),
             },
             hide_index=True,
-            use_container_width=True,
+            use_container_width=False,  # এটিকে False করা হয়েছে যাতে কলামের ফিক্সড সাইজ বজায় থাকে এবং স্ক্রলবার আসে
             key=f"editor_{article_name}"
         )
         
-        # শিটের স্ট্যাটাস মেমরিতে ডাইনামিকালি সেভ রাখা
         if st.button(f"💾 Save Updates to {article_name}", key=f"btn_{article_name}"):
             st.session_state.article_sheets[article_name] = edited_df
             st.success(f"✅ {article_name} শিটের ডেটা সফলভাবে আপডেট করা হয়েছে!")
