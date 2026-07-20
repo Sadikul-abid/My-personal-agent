@@ -11,38 +11,47 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🎨 🛠️ FORCE HORIZONTAL SCROLLBAR VIA CSS
-# এটি আপনার টেবিলের নিচে ফিজিক্যাল স্ক্রলবারটি দেখতে এবং ডানে-বামে সরাতে সাহায্য করবে
-# 🎨 🛠️ FORCE HORIZONTAL SCROLLBAR VIA CSS
+# 🎨 🛠️ ADVANCED CSS FOR FORCED HORIZONTAL SCROLLBAR
+# টেবিলের ডাটা যেন কোনোভাবেই না কাটে এবং ব্রাউজার নিচে একটি স্পষ্ট স্ক্রলবার দেয়, তা নিশ্চিত করা হয়েছে
 st.markdown("""
     <style>
-        /* Force horizontal scrollbar on Streamlit Data Editors */
+        /* Force container to allow horizontal overflow */
+        .stBlock {
+            overflow-x: auto !important;
+        }
+        
+        /* Target Streamlit's internal glide-data-grid wrap */
         div[data-testid="stDataEditor"] {
             overflow-x: auto !important;
             min-width: 100% !important;
+            display: block !important;
         }
-        /* Ensure the data grid inside doesn't clip */
+        
         div[data-testid="stDataEditor"] > div {
             overflow-x: auto !important;
         }
-        /* Style the scrollbar to make it clearly visible */
+
+        /* Make the scrollbar look thick and visible */
         ::-webkit-scrollbar {
-            height: 10px;
-            width: 10px;
+            height: 12px !important;
+            width: 12px !important;
+            display: block !important;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 5px;
+            background: #f7f9fa !important;
+            border-radius: 6px !important;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1) !important;
         }
         ::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 5px;
+            background: #a1a8af !important;
+            border-radius: 6px !important;
+            border: 2px solid #f7f9fa !important;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
+            background: #78828c !important;
         }
     </style>
-""", unsafe_allow_html=True)  # <-- এখানে শুধু 'unsafe_allow_html=True' লিখুন
+""", unsafe_allow_html=True)
 
 # 🔐 Groq API কী চেকিং
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.sidebar.text_input("Enter Groq API Key:", type="password")
@@ -174,7 +183,6 @@ if st.button("Query Master Agent", type="primary"):
         assigned_specialist = route_request_to_agent(user_query)
         st.write(f"**⚡ Master Agent Routing Decision:** `Delegated to {assigned_specialist}`")
         
-        # স্পেশালিস্ট চয়ন লজিক
         if "PLANNER_SPECIALIST" in assigned_specialist:
             st.markdown("#### 📊 Selected Sub-Agent: **[Planner Specialist Agent]**")
             analysis_result = run_planner_specialist_agent(user_query)
@@ -204,7 +212,7 @@ if st.sidebar.button("🚀 Add Tab / Sheet"):
         st.sidebar.success(f"🎉 Tab '{new_article_name}' added successfully!")
         st.rerun()
 
-# 🗂️ ৬. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
+# 🗂️ 六. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
 base_tabs = ["📋 Master_Template", "📊 Dashboard"]
 dynamic_article_tabs = list(st.session_state.article_sheets.keys())
 all_tabs_list = base_tabs + dynamic_article_tabs
@@ -253,31 +261,32 @@ with ui_tabs[1]:
                 st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
 
 # --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
-# এখানে কলামের ফিক্সড ডাইমেনশন এবং উপরে ইনজেক্ট করা CSS একসাথে কাজ করে একটি নিখুঁত স্ক্রলবার তৈরি করবে
+# এখানে কলামের ফিক্সড টোটাল পিক্সেল উইডথ বাড়িয়ে দেওয়া হয়েছে যাতে টেবিলটি কন্টেইনার ওভারফ্লো করে স্ক্রলবার ট্রিগার করে।
 for i, article_name in enumerate(dynamic_article_tabs):
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
         
-        st.markdown("💡 *ডানে-বামে সরাতে নিচে যুক্ত হওয়া নতুন স্ক্রলবার (Scrollbar) ব্যবহার করুন:*")
+        st.markdown("💡 *ডানে-বামে সরাতে নিচের নতুন স্ক্রলবার ব্যবহার করুন:*")
         
+        # কন্টেইনারের বাইরে ডেটা পুশ করার জন্য উইডথ বাড়ানো হয়েছে
         edited_df = st.data_editor(
             df_current,
             column_config={
-                "SL No": st.column_config.TextColumn("SL No", width=80, disabled=True),
-                "Task Name": st.column_config.TextColumn("Task Name", width=320, disabled=True),
-                "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=100, disabled=True),
-                "Target Date": st.column_config.TextColumn("Target Date", width=140, disabled=True),
-                "WK No": st.column_config.TextColumn("WK No", width=90, disabled=True),
+                "SL No": st.column_config.TextColumn("SL No", width=120, disabled=True),
+                "Task Name": st.column_config.TextColumn("Task Name", width=450, disabled=True),
+                "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=120, disabled=True),
+                "Target Date": st.column_config.TextColumn("Target Date", width=180, disabled=True),
+                "WK No": st.column_config.TextColumn("WK No", width=120, disabled=True),
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
                     options=["Not Started", "Running", "Done", "Delayed"],
-                    width=130,
+                    width=160,
                     required=True,
                 ),
             },
             hide_index=True,
-            use_container_width=False,  # স্ক্রলবারের কার্যকারিতা নিশ্চিত করতে ফিক্সড উইডথ অ্যাক্টিভ রাখা হয়েছে
+            use_container_width=False,  # Force fixed columns format
             key=f"editor_{article_name}"
         )
         
