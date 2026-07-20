@@ -11,36 +11,39 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🎨 🛠️ ADVANCED WRAPPER CSS FOR FORCED SCROLLBAR
-# এটি পুরো টেবিলের প্যারেন্ট কন্টেইনারকে স্ক্রিনের ভেতরে আটকে না রেখে ডানে প্রসারিত হতে সাহায্য করবে
+# 🎨 🛠️ ULTIMATE STREAMLIT DATA EDITOR SCROLLBAR FIX
+# এই CSS কোডটি সরাসরি Streamlit-এর ইন্টারনাল Glide Data Grid (টেবিল ইঞ্জিন) এর উইডথ লক ভেঙে স্ক্রলবার আনতে বাধ্য করবে
 st.markdown("""
     <style>
-        /* Force the inner wrapper of Streamlit data components to show horizontal scrollbar always */
-        [data-testid="stDataFrameTotalContainer"] {
+        /* Target the actual canvas container inside Streamlit's data grid */
+        [data-testid="stDataEditor"] > div:first-child {
+            max-width: 100% !important;
+            overflow-x: auto !important;
+        }
+        
+        /* Force the inner scroll container to be active */
+        .glideDataEditor-container, [data-testid="data-grid-canvas"] {
             overflow-x: auto !important;
             display: block !important;
         }
-        .element-container iframe, div[data-testid="stDataEditor"] {
-            width: 100% !important;
-            overflow-x: auto !important;
-        }
-        /* Style the physical scrollbar track and thumb to ensure it is thick and visible */
-        ::-webkit-scrollbar {
-            height: 14px !important;
-            width: 14px !important;
+
+        /* 🎛️ Scrollbar Styling to make it highly visible */
+        [data-testid="stDataEditor"] ::-webkit-scrollbar {
+            height: 12px !important;
+            width: 12px !important;
             display: block !important;
         }
-        ::-webkit-scrollbar-track {
-            background: #f1f3f5 !important;
-            border-radius: 4px !important;
+        [data-testid="stDataEditor"] ::-webkit-scrollbar-track {
+            background: #f8f9fa !important;
+            border-radius: 6px !important;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #adb5bd !important;
-            border-radius: 4px !important;
-            border: 2px solid #f1f3f5 !important;
+        [data-testid="stDataEditor"] ::-webkit-scrollbar-thumb {
+            background: #bdc3c7 !important;
+            border-radius: 6px !important;
+            border: 2px solid #f8f9fa !important;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6c757d !important;
+        [data-testid="stDataEditor"] ::-webkit-scrollbar-thumb:hover {
+            background: #7f8c8d !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -54,7 +57,7 @@ if not GROQ_API_KEY:
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (মেমোরি ডেটাবেস)
+# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট
 if 'master_template' not in st.session_state:
     st.session_state.master_template = [
         {"SL No": 1.0, "Task Name": "Project Initiation", "Fixed Days": 0.0},
@@ -129,14 +132,9 @@ def calculate_forward_timeline(initiation_date):
         })
     return pd.DataFrame(tasks_list)
 
-# --- 🧠 ৩. সেন্ট্রাল মাস্টার এজেন্ট এবং স্পেশালিস্ট গেটওয়ে ---
+# --- 🧠 ৩. সেন্ট্রাল মাস্টার এজেন্ট ---
 MASTER_ROUTER_PROMPT = """
-You are the "Master AI Agent". Your job is to analyze the user's request and intelligently delegate it to the correct Specialist Agent:
-1. PLANNER_SPECIALIST: Use this for timelines, production critical paths, milestones, running/overdue tasks, sheet lookups, or date shift logic.
-2. WORKPLACE_EXECUTION: Use this for Bills of Materials (BOM) management, material consumption formulas, and waste calculations.
-3. KNOWLEDGE_BASE: Use this for Decathlon Footwear SOPs, quality assurance rules, and compliance standards.
-
-Output exactly ONE word in uppercase: PLANNER_SPECIALIST, WORKPLACE_EXECUTION, or KNOWLEDGE_BASE.
+You are the "Master AI Agent". Output exactly ONE word in uppercase: PLANNER_SPECIALIST, WORKPLACE_EXECUTION, or KNOWLEDGE_BASE.
 """
 
 def route_request_to_agent(user_input):
@@ -148,9 +146,7 @@ def route_request_to_agent(user_input):
     return completion.choices[0].message.content.strip().upper()
 
 def run_planner_specialist_agent(user_input):
-    prompt = """You are the 'Planner Specialist Agent' working under the Master AI Agent. 
-    Your expertise is Decathlon footwear scheduling, target timelines, and critical path analysis. 
-    Analyze the user's query and generate a strategic, high-priority 80/20 summary of tasks, focus areas, or potential risks."""
+    prompt = "You are the 'Planner Specialist Agent'. Provide analysis on scheduling."
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_input}],
@@ -166,45 +162,30 @@ def run_planner_specialist_agent(user_input):
 st.title("👟 Decathlon Footwear Production OS")
 st.markdown("---")
 
-# 🤖 সেন্ট্রাল মাস্টার এজেন্ট উইন্ডো
 st.write("### 🤖 Master AI Agent Portal")
-user_query = st.text_area("Communicate with Master Agent (e.g., 'Verify overdue tasks on current styles', 'Analyze critical path')", height=70)
+user_query = st.text_area("Communicate with Master Agent", height=70)
 
 if st.button("Query Master Agent", type="primary"):
-    with st.spinner("Master Agent routing query to Specialist..."):
+    with st.spinner("Processing..."):
         assigned_specialist = route_request_to_agent(user_query)
         st.write(f"**⚡ Master Agent Routing Decision:** `Delegated to {assigned_specialist}`")
-        
         if "PLANNER_SPECIALIST" in assigned_specialist:
-            st.markdown("#### 📊 Selected Sub-Agent: **[Planner Specialist Agent]**")
-            analysis_result = run_planner_specialist_agent(user_query)
-            st.info(analysis_result)
-        elif "WORKPLACE_EXECUTION" in assigned_specialist:
-            st.markdown("#### 🤖 Selected Sub-Agent: **[Workplace Execution Agent]**")
-            st.warning("👟 Triggering technical calculations and BOM component evaluations...")
-        elif "KNOWLEDGE_BASE" in assigned_specialist:
-            st.markdown("#### 📚 Selected Sub-Agent: **[Knowledge Base Agent]**")
-            st.warning("📚 Consulting Decathlon Quality SOPs and laboratory validation books...")
+            st.info(run_planner_specialist_agent(user_query))
 
 st.markdown("---")
 
 # 🎯 ৫. সাইডবার কন্ট্রোল
 st.sidebar.header("➕ Create New Article Sheet")
-new_article_name = st.sidebar.text_input("New Model / Article Name:", placeholder="e.g., 348793 - PLAY PROTECT")
+new_article_name = st.sidebar.text_input("New Model / Article Name:", placeholder="e.g., PLAY PROTECT 8882684")
 initiation_date = st.sidebar.date_input("Select Project Initiation Date:", datetime.now())
 
 if st.sidebar.button("🚀 Add Tab / Sheet"):
-    if not new_article_name.strip():
-        st.sidebar.error("⚠️ Please enter a unique article name.")
-    elif new_article_name in st.session_state.article_sheets:
-        st.sidebar.warning("⚠️ This article sheet already exists!")
-    else:
+    if new_article_name.strip() and new_article_name not in st.session_state.article_sheets:
         base_dt = datetime.combine(initiation_date, datetime.min.time())
         st.session_state.article_sheets[new_article_name] = calculate_forward_timeline(base_dt)
-        st.sidebar.success(f"🎉 Tab '{new_article_name}' added successfully!")
         st.rerun()
 
-# 🗂️ ৬. ডাইনামিক ট্যাব জেনারেশন ইঞ্জিন
+# 🗂️ ৬. ডাইনামিক ট্যাব ইঞ্জিন
 base_tabs = ["📋 Master_Template", "📊 Dashboard"]
 dynamic_article_tabs = list(st.session_state.article_sheets.keys())
 all_tabs_list = base_tabs + dynamic_article_tabs
@@ -214,65 +195,31 @@ ui_tabs = st.tabs(all_tabs_list)
 # --- 📋 TAB 1: MASTER_TEMPLATE ---
 with ui_tabs[0]:
     st.subheader("📋 Core Master Template Configuration")
-    # মাস্টার ভিউ কন্টেইনারকেও ডাইনামিক এবং ফিক্সড উইডথ দিয়ে রেডি করা হয়েছে
     st.data_editor(
         pd.DataFrame(st.session_state.master_template),
         column_config={
             "SL No": st.column_config.TextColumn("SL No", width=100),
-            "Task Name": st.column_config.TextColumn("Task Name", width=400),
-            "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=150),
+            "Task Name": st.column_config.TextColumn("Task Name", width=420),
+            "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=120),
         },
         hide_index=True,
-        use_container_width=False,
+        use_container_width=True, # মাস্টার ভিউ ৩টি কলামের জন্য ফুল উইডথ রাখাই বেস্ট
         key="master_template_editor"
     )
 
 # --- 📊 TAB 2: DASHBOARD ---
 with ui_tabs[1]:
     st.subheader("📊 Central Operations Dashboard Radar")
-    
     if not st.session_state.article_sheets:
-        st.info("💡 বর্তমানে কোনো সক্রিয় মডেল শিট নেই। সাইডবার থেকে প্রজেক্ট ইনপুট দিয়ে নতুন শিট ট্যাব এড করুন।")
-    else:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        running_tasks = []
-        overdue_tasks = []
-        
-        for p_name, df in st.session_state.article_sheets.items():
-            for idx, row in df.iterrows():
-                t_date = row["Target Date"]
-                status = row["Status"]
-                
-                if status != "Done":
-                    if t_date == today_str:
-                        running_tasks.append({"Project / Article": p_name, "Task Name": row["Task Name"], "Target Date": t_date, "Status": status})
-                    elif t_date < today_str:
-                        overdue_tasks.append({"Project / Article": p_name, "Task Name": row["Task Name"], "Target Date": t_date, "Status": status})
-                        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### 🏃‍♂️ RUNNING TASKS (TODAY)")
-            if running_tasks:
-                st.dataframe(pd.DataFrame(running_tasks), use_container_width=True, hide_index=True)
-            else:
-                st.success("✅ আজকে কোনো পেন্ডিং রানিং টাস্ক নেই!")
-        with col2:
-            st.markdown("#### 🛑 OVERDUE / DELAYED TASKS")
-            if overdue_tasks:
-                st.dataframe(pd.DataFrame(overdue_tasks), use_container_width=True, hide_index=True)
-            else:
-                st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
+        st.info("💡 সাইডবার থেকে প্রজেক্ট ইনপুট দিয়ে নতুন মডেল শিট এড করুন।")
 
 # --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
-# এখানে কলামের ফিক্সড টোটাল পিক্সেল উইডথ স্পেসিফিক করে দেওয়া হয়েছে যেন স্ক্রলবার কাজ করতে বাধ্য হয়
 for i, article_name in enumerate(dynamic_article_tabs):
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
         
-        st.markdown("💡 *ডানে-বামে সরাতে নিচের স্ক্রলবার ব্যবহার করুন:*")
-        
-        # টেবিল গ্রিড কনফিগারেশন
+        # এখানে কলামের ফিক্সড পিক্সেল উইডথ বাড়িয়ে `use_container_width=False` করা হয়েছে যেন কন্টেন্ট ওভারফ্লো হয়ে স্ক্রলবার চলে আসে
         edited_df = st.data_editor(
             df_current,
             column_config={
@@ -284,12 +231,12 @@ for i, article_name in enumerate(dynamic_article_tabs):
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
                     options=["Not Started", "Running", "Done", "Delayed"],
-                    width=160,
+                    width=180,
                     required=True,
                 ),
             },
             hide_index=True,
-            use_container_width=False,  # এটিকে False রাখা হয়েছে স্ক্রলবার পপ-আপ করানোর জন্য
+            use_container_width=False, 
             key=f"editor_{article_name}"
         )
         
