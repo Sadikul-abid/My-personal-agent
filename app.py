@@ -4,23 +4,55 @@ from datetime import datetime, timedelta
 import os
 from groq import Groq
 
-# 📄 ১. পেজ কনফিগারেশন
+# 📄 ১. পেজ কনফিগারেশন ও লেআউট
 st.set_page_config(
     page_title="Decathlon Footwear Production OS",
     page_icon="👟",
     layout="wide"
 )
 
+# 🎨 🛠️ FORCE HORIZONTAL SCROLLBAR VIA CSS
+# এটি আপনার টেবিলের নিচে ফিজিক্যাল স্ক্রলবারটি দেখতে এবং ডানে-বামে সরাতে সাহায্য করবে
+st.markdown("""
+    <style>
+        /* Force horizontal scrollbar on Streamlit Data Editors */
+        div[data-testid="stDataEditor"] {
+            overflow-x: auto !important;
+            min-width: 100% !important;
+        }
+        /* Ensure the data grid inside doesn't clip */
+        div[data-testid="stDataEditor"] > div {
+            overflow-x: auto !important;
+        }
+        /* Style the scrollbar to make it clearly visible */
+        ::-webkit-scrollbar {
+            height: 10px;
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+""", unsafe_allowed_html=True)
+
 # 🔐 Groq API কী চেকিং
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.sidebar.text_input("Enter Groq API Key:", type="password")
 
 if not GROQ_API_KEY:
-    st.warning("⚠️ Please provide a Groq API Key to activate the Master Router.")
+    st.warning("⚠️ Please provide a Groq API Key to activate the Master Router Agent.")
     st.stop()
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (এক্সেল শিট মেমোরি ডেটাবেস)
+# 💾 ২. স্ট্রীমলিট স্টেট ম্যানেজমেন্ট (মেমোরি ডেটাবেস)
 if 'master_template' not in st.session_state:
     st.session_state.master_template = [
         {"SL No": 1.0, "Task Name": "Project Initiation", "Fixed Days": 0.0},
@@ -95,25 +127,28 @@ def calculate_forward_timeline(initiation_date):
         })
     return pd.DataFrame(tasks_list)
 
-# --- 🧠 ৩. মাস্টার রাউটার লজিক ---
+# --- 🧠 ৩. সেন্ট্রাল মাস্টার এজেন্ট এবং স্পেশালিস্ট গেটওয়ে ---
 MASTER_ROUTER_PROMPT = """
-You are the "Master AI OS Router". Classify the request into exactly ONE category:
-1. PLANNER (Timelines, deadlines, dashboard reviews, running tasks, sheet lookups)
-2. WORKPLACE_EXECUTION (BOM structures, consumption math, waste calculation)
-3. KNOWLEDGE_BASE (Decathlon SOP rules, factory compliance standards)
-Output ONLY the single word uppercase.
+You are the "Master AI Agent". Your job is to analyze the user's request and intelligently delegate it to the correct Specialist Agent:
+1. PLANNER_SPECIALIST: Use this for timelines, production critical paths, milestones, running/overdue tasks, sheet lookups, or date shift logic.
+2. WORKPLACE_EXECUTION: Use this for Bills of Materials (BOM) management, material consumption formulas, and waste calculations.
+3. KNOWLEDGE_BASE: Use this for Decathlon Footwear SOPs, quality assurance rules, and compliance standards.
+
+Output exactly ONE word in uppercase: PLANNER_SPECIALIST, WORKPLACE_EXECUTION, or KNOWLEDGE_BASE.
 """
 
-def route_request(user_input):
+def route_request_to_agent(user_input):
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": MASTER_ROUTER_PROMPT}, {"role": "user", "content": user_input}],
-        temperature=0.0, max_tokens=10
+        temperature=0.0, max_tokens=15
     )
     return completion.choices[0].message.content.strip().upper()
 
-def run_80_20_planner(user_input):
-    prompt = "You are the expert Decathlon Footwear Planner. Filter the user's issue and extract the high-priority 20% milestones that block production or validation. Keep it concise."
+def run_planner_specialist_agent(user_input):
+    prompt = """You are the 'Planner Specialist Agent' working under the Master AI Agent. 
+    Your expertise is Decathlon footwear scheduling, target timelines, and critical path analysis. 
+    Analyze the user's query and generate a strategic, high-priority 80/20 summary of tasks, focus areas, or potential risks."""
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": prompt}, {"role": "user", "content": user_input}],
@@ -123,28 +158,32 @@ def run_80_20_planner(user_input):
 
 
 # ========================================================
-# 💻 ৪. STREAMLIT VISUAL DYNAMIC TABS INTERFACE
+# 💻 ৪. UI INTERFACE & AGENT HUB
 # ========================================================
 
 st.title("👟 Decathlon Footwear Production OS")
 st.markdown("---")
 
-# 🤖 এআই অ্যাসিস্ট্যান্ট সেকশন
-st.write("### 🤖 Interact with Master AI Agent")
-user_query = st.text_area("Ask the Master Router (e.g., 'Analyze running tasks', 'Audit BOM consumption')", height=70)
-if st.button("Send to Master Router", type="primary"):
-    with st.spinner("Routing..."):
-        decision = route_request(user_query)
-        st.write(f"**🎯 Master Router Decision:** `{decision}`")
-        if "PLANNER" in decision:
-            st.markdown("#### 📊 Specialist Agent: **[80/20 Footwear Planner Agent]**")
-            st.info(run_80_20_planner(user_query))
-        elif "WORKPLACE_EXECUTION" in decision:
-            st.markdown("#### 🤖 Specialist Agent: **[Workplace Execution Agent]**")
-            st.warning("👟 Technical calculations and BOM verification triggers here.")
-        elif "KNOWLEDGE_BASE" in decision:
-            st.markdown("#### 📚 Specialist Agent: **[Knowledge Base Agent]**")
-            st.warning("📚 Decathlon Quality SOP and standard lookups triggers here.")
+# 🤖 সেন্ট্রাল মাস্টার এজেন্ট উইন্ডো
+st.write("### 🤖 Master AI Agent Portal")
+user_query = st.text_area("Communicate with Master Agent (e.g., 'Verify overdue tasks on current styles', 'Analyze critical path')", height=70)
+
+if st.button("Query Master Agent", type="primary"):
+    with st.spinner("Master Agent routing query to Specialist..."):
+        assigned_specialist = route_request_to_agent(user_query)
+        st.write(f"**⚡ Master Agent Routing Decision:** `Delegated to {assigned_specialist}`")
+        
+        # স্পেশালিস্ট চয়ন লজিক
+        if "PLANNER_SPECIALIST" in assigned_specialist:
+            st.markdown("#### 📊 Selected Sub-Agent: **[Planner Specialist Agent]**")
+            analysis_result = run_planner_specialist_agent(user_query)
+            st.info(analysis_result)
+        elif "WORKPLACE_EXECUTION" in assigned_specialist:
+            st.markdown("#### 🤖 Selected Sub-Agent: **[Workplace Execution Agent]**")
+            st.warning("👟 Triggering technical calculations and BOM component evaluations...")
+        elif "KNOWLEDGE_BASE" in assigned_specialist:
+            st.markdown("#### 📚 Selected Sub-Agent: **[Knowledge Base Agent]**")
+            st.warning("📚 Consulting Decathlon Quality SOPs and laboratory validation books...")
 
 st.markdown("---")
 
@@ -174,7 +213,6 @@ ui_tabs = st.tabs(all_tabs_list)
 # --- 📋 TAB 1: MASTER_TEMPLATE ---
 with ui_tabs[0]:
     st.subheader("📋 Core Master Template Configuration")
-    st.markdown("এটি আপনার সেন্ট্রাল লিড টাইম কনফিগারেশন।")
     st.dataframe(pd.DataFrame(st.session_state.master_template), use_container_width=True, hide_index=True)
 
 # --- 📊 TAB 2: DASHBOARD ---
@@ -214,32 +252,31 @@ with ui_tabs[1]:
                 st.success("🎉 চমৎকার! কোনো ব্যাকলগ বা ওভারডিউ টাস্ক নেই।")
 
 # --- 📁 DYNAMIC TABS: INDIVIDUAL ARTICLE SHEETS ---
-# এখানে আমরা কলাম কনফিগ-এ ফিক্সড `width` দিয়েছি যাতে স্ক্রিন ছোট হলেও নিচে হরিজন্টাল স্ক্রলবার কাজ করে।
+# এখানে কলামের ফিক্সড ডাইমেনশন এবং উপরে ইনজেক্ট করা CSS একসাথে কাজ করে একটি নিখুঁত স্ক্রলবার তৈরি করবে
 for i, article_name in enumerate(dynamic_article_tabs):
     with ui_tabs[i + 2]:
         st.subheader(f"📑 Production Sheet for Style: `{article_name}`")
         df_current = st.session_state.article_sheets[article_name]
         
-        st.markdown("💡 *Status পরিবর্তন করতে কলামের ড্রপডাউনে ডাবল ক্লিক করুন। ডানে-বামে সরাতে নিচের স্ক্রলবার ব্যবহার করুন:*")
+        st.markdown("💡 *ডানে-বামে সরাতে নিচে যুক্ত হওয়া নতুন স্ক্রলবার (Scrollbar) ব্যবহার করুন:*")
         
-        # টেবিলটির কলাম উইডথ ফিক্সড করার মাধ্যমে স্ক্রলবার জেনারেট করা হয়েছে
         edited_df = st.data_editor(
             df_current,
             column_config={
-                "SL No": st.column_config.TextColumn("SL No", width="small", disabled=True),
-                "Task Name": st.column_config.TextColumn("Task Name", width="large", disabled=True),
-                "Fixed Days": st.column_config.NumberColumn("Fixed Days", width="small", disabled=True),
-                "Target Date": st.column_config.TextColumn("Target Date", width="medium", disabled=True),
-                "WK No": st.column_config.TextColumn("WK No", width="small", disabled=True),
+                "SL No": st.column_config.TextColumn("SL No", width=80, disabled=True),
+                "Task Name": st.column_config.TextColumn("Task Name", width=320, disabled=True),
+                "Fixed Days": st.column_config.NumberColumn("Fixed Days", width=100, disabled=True),
+                "Target Date": st.column_config.TextColumn("Target Date", width=140, disabled=True),
+                "WK No": st.column_config.TextColumn("WK No", width=90, disabled=True),
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
                     options=["Not Started", "Running", "Done", "Delayed"],
-                    width="medium",
+                    width=130,
                     required=True,
                 ),
             },
             hide_index=True,
-            use_container_width=False,  # এটিকে False করা হয়েছে যাতে কলামের ফিক্সড সাইজ বজায় থাকে এবং স্ক্রলবার আসে
+            use_container_width=False,  # স্ক্রলবারের কার্যকারিতা নিশ্চিত করতে ফিক্সড উইডথ অ্যাক্টিভ রাখা হয়েছে
             key=f"editor_{article_name}"
         )
         
